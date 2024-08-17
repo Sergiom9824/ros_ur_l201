@@ -5,7 +5,7 @@ import rospy
 from sensor_msgs.msg import JointState
 
 import sys
-sys.path.insert(0, '/home/sergio/ros_ws/src/utec/src/functions')
+sys.path.insert(0, '/home/sergio/ur_ws/src/ur_pkg/src/functions')
 from ur5_params import *
 from ur_kinematics_functions import *
 from markers import *
