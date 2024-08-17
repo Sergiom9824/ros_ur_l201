@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+
+import rospy
+import actionlib
+import tf
+
+from sensor_msgs.msg import JointState
+from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryGoal
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+
+import sys
+sys.path.insert(0, '/home/sergio/ros_ws/src/utec/src/functions')
+from ur5_params import *
+from ur_kinematics_functions import *
+
+ur5_control = open("/home/sergio/ros_ws/src/utec/data/ur5_diffkine.txt", "w") 
+ur5_control.truncate(0)
+
+# Initial configuration
+q0  = np.radians(np.array([-90.0, -90.0, 90.0, -90.0, -90.0, 0.0]))
+
+# Posicion deseada
+#xd = np.array([-0.7892,  0.1302,  0.1092])
+xd = np.array([-0.10415,  0.7469,  0.236859])
+if check_ur_ws(xd,r_ws) == True:
+	print("Posicion deseada alcanzable")
+else:
+	print("Posicion deseada inalcanzable")
+
+q_real = np.zeros(6)
+
+def callback(msg):
+
+	global q_real
+	
+	q_real = msg.position
+	q_real = np.asarray(q_real)
+	q_real[[0,2]] = q_real[[2,0]]
+
+if __name__ == "__main__":
+
+	rospy.init_node("ur5_control_diffkine_pos_data")
+	
+	rospy.Subscriber("/ur5_robot/joint_states", JointState, callback)
+	
+	#robot_client = actionlib.SimpleActionClient('/ur5_robot/scaled_pos_joint_traj_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+	robot_client = actionlib.SimpleActionClient('/ur5_robot/pos_joint_traj_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+	print("Waiting for server...")
+	robot_client.wait_for_server()
+	print("Connected to server")
+
+	joint_names = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
+
+	tf_listener = tf.TransformListener()
+
+	#Configuracion articular inicial
+	Q0 = q0.tolist()
+
+	g = FollowJointTrajectoryGoal()
+	g.trajectory = JointTrajectory()
+	g.trajectory.joint_names = joint_names
+
+	# Posicion articular inicial
+	g.trajectory.points = [JointTrajectoryPoint(positions=Q0,time_from_start=rospy.Duration(1.0))]
+	robot_client.send_goal(g)
+	robot_client.wait_for_result()
+	rospy.sleep(1)
+	
+	# Frecuencia del envio (en Hz)
+	freq = 100
+	rate = rospy.Rate(freq)
+	# Tiempo de muestreo
+	dt = 1.0/freq	
+	t = 1.0 + dt
+	
+	# Initial joint configuration
+	q = copy(q0)
+	
+	#Constante de ganancia cinematica
+	k = 0.5
+	
+	#Maxmimo error admisible
+	epsilon = 1e-3
+	#Flag para saber si se alcanzo la posicion deseada
+	Flag_e = False
+	
+	while not rospy.is_shutdown():
+		
+		#Actualizar valores de q si aun no se alcanza la posicion deseada
+		if Flag_e == False:
+
+			# Cinematica directa dada la configuracion actual q
+			T = fkine(q_real,l)
+			# Error en la posicion
+			x = T[0:3,3]
+			e = x-xd
+			print("Error: {} m".format(np.linalg.norm(e)))
+			print("")
+
+			if np.linalg.norm(e) <= epsilon:
+				Flag_e = True
+				#print("Desired position reached")
+			
+			else:
+			
+				# Derivada del error
+				de = -k*e
+				# Jacobiano para la configuracion actual q
+				J = jacobian_position(q_real,l)              
+				# Pseudo-inversa de Moore-Penrose del Jacobiano
+				Jinv = np.linalg.pinv(J)
+				# Variacion de la configuracion articular
+				dq = Jinv.dot(de)
+				# Integracion para obtener la nueva configuracion articular
+				q = q + dt*dq
+				#Limitar valores articulares
+				q = limit_joint_pos(q,q_lim)
+
+				#Se le asigna al Qdes la configuracion articular hallada
+				Qdes = q.tolist()
+
+				g.trajectory.points = [JointTrajectoryPoint(positions=Qdes,time_from_start=rospy.Duration(t))]
+				robot_client.send_goal(g)
+				
+			t = t + dt
+
+			trans = fkine(q_real,l)[0:3,3]
+									
+			ur5_control.write(str(trans[0])+' '+str(trans[1])+' '+str(trans[2])+' '+str(xd[0])+' '+str(xd[1])+' '+str(xd[2])+' '+str(t)+'\n ')
+
+			rate.sleep()
+
+		#Mantener configuracion articular si ya se alcanzo la posicion deseada
+		else:
+
+			t = t + dt
+			
+			trans = fkine(q_real,l)[0:3,3]
+						
+			ur5_control.write(str(trans[0])+' '+str(trans[1])+' '+str(trans[2])+' '+str(xd[0])+' '+str(xd[1])+' '+str(xd[2])+' '+str(t)+'\n ')
+			
+			rate.sleep()
+			
+ur5_control.close()

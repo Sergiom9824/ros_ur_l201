@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+
+import rospy
+
+from sensor_msgs.msg import JointState
+
+import sys
+sys.path.insert(0, '/home/sergio/ros_ws/src/utec/src/functions')
+from ur5_params import *
+from ur_kinematics_functions import *
+from markers import *
+
+if __name__ == '__main__':
+
+    # Initialize the node
+    rospy.init_node("diffkine_pos_ur5_control_rviz")
+    print('starting motion ... ')
+    # Publisher: publish to the joint_states topic
+    pub = rospy.Publisher('joint_states', JointState, queue_size=1000)
+    
+    # Markers for the current and desired positions
+    bmarker_current  = BallMarker(color['RED'])
+    bmarker_desired = BallMarker(color['GREEN'])
+
+    # Joint names
+    jnames = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
+            'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
+
+    # Initial configuration
+    #q0  = np.array([0.0, -1.0, 1.7, -2.2, -1.6, 0.0])
+    q0  = np.radians(np.array([-90.0, -90.0, 90.0, -90.0, -90.0, 0.0]))
+
+    # Desired position
+    xd = np.array([-0.076, 0.423, 0.309])
+    if check_ur_ws(xd,r_ws) == True:
+        print("Desired position reachable")
+    else:
+        print("Desired position unreachable")
+    
+    # Resulting initial position (end effector with respect to the base link)
+    T = fkine(q0,l)
+    x0 = T[0:3,3]
+
+    # Red marker shows the achieved position
+    bmarker_current.xyz(x0)
+    # Green marker shows the desired position
+    bmarker_desired.xyz(xd)
+
+    # Instance of the JointState message
+    jstate = JointState()
+    # Values of the message
+    jstate.header.stamp = rospy.Time.now()
+    jstate.name = jnames
+    # Add the head joint value (with value 0) to the joints
+    jstate.position = q0
+    pub.publish(jstate)
+    rospy.sleep(1)
+
+    # Frequency (in Hz) and control period 
+    freq = 200
+    dt = 1.0/freq
+    rate = rospy.Rate(freq)
+
+    # Initial joint configuration
+    q = copy(q0)
+    # Initialize the derror vector (derivative of the error)
+    de = np.zeros(7)
+
+    #Constante de ganancia cinematica
+    k = 1
+    #Maxmimo error admisible
+    epsilon = 0.001
+    #Flag para saber si se alcanzo la posicion deseada
+    Flag_e = False
+
+    # Main loop
+    while not rospy.is_shutdown():
+        
+        # Current time (needed for ROS)
+        jstate.header.stamp = rospy.Time.now()
+        
+        # Kinematic control law for the pose (complete here)
+        # --------------------------------------------------
+        if Flag_e == False:
+        
+            # Cinematica directa dada la configuracion actual q
+            T = fkine(q,l)
+            # Error en la posicion
+            x = T[0:3,3]
+            e_pos = x-xd
+            print("Error: {} m".format(np.linalg.norm(e_pos)))
+            print("")
+            
+            if (np.linalg.norm(e_pos)<epsilon):
+                Flag_e = True
+            
+            else:
+            
+                # Derivada del error
+                de = -k*e_pos
+                # Jacobiano para la configuracion actual q
+                J = jacobian_position(q,l)              
+                # Pseudo-inversa de Moore-Penrose del Jacobiano
+                Jinv = np.linalg.pinv(J)
+                # Variacion de la configuracion articular
+                dq = Jinv.dot(de)
+                # Integracion para obtener la nueva configuracion articular
+                q = q + dt*dq
+                #Limitar valores articulares
+                q = limit_joint_pos(q,q_lim)
+                
+                # -----------------------------
+                # Publish the message
+                jstate.position = q
+                pub.publish(jstate)
+                bmarker_desired.xyz(xd)
+                bmarker_current.xyz(x)
+            
+            # Wait for the next iteration
+            rate.sleep()
+            
+        else:
+        
+            # Publish the message
+            jstate.position = q
+            pub.publish(jstate)
+            bmarker_desired.xyz(xd)
+            bmarker_current.xyz(x)
+            
+            # Wait for the next iteration
+            rate.sleep()
