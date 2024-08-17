@@ -1,1 +1,1 @@
-Este repositorio contiene los archivos del taller realizado el 17 de Agosto del 2024.
+Este repositorio contiene los archivos del taller realizado el sábado 17 de agosto del 2024.
