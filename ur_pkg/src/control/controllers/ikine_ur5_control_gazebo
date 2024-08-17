@@ -15,7 +15,7 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 # =============================================================
 # Configuracion articular inicial (rad)
-q = np.radians(np.array([90.0, -90.0, 90.0, -90.0, -90.0, 0.0]))
+q = np.radians(np.array([-90.0, -90.0, 90.0, -90.0, -90.0, 0.0]))
 
 # Posicion deseada
 #xd = np.array([-0.1017,  0.724,  0.341])
@@ -30,21 +30,9 @@ else:
 qdes = ikine(xd,q,l)
 # =============================================================
 
-q_real = np.zeros(6)
-
-def callback(msg):
-
-	global q_real
-	
-	q_real = msg.position
-	q_real = np.asarray(q_real)
-	q_real[[0,2]] = q_real[[2,0]]
-
 if __name__ == '__main__':
 
 	rospy.init_node("ur5_control_ikine", anonymous=True, disable_signals=True)
-	
-	rospy.Subscriber("/ur5_robot/joint_states", JointState, callback)
 	
 	tf_listener = tf.TransformListener()
 	
