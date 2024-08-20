@@ -2,7 +2,7 @@
 <launch>
 
   <include file="$(find ur_pkg)/launch/real/ur5_bringup_mod.launch" ns="ur5_robot">
-  	<arg name="robot_ip" value="192.168.10.101"/>
+  	<arg name="robot_ip" value="192.168.10.103"/>
   	<arg name="reverse_ip" value="192.168.10.105"/>
   	<arg name="reverse_port" value="50001"/>
   	<arg name="script_sender_port" value="50002"/>

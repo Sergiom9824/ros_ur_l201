@@ -67,7 +67,7 @@ if __name__ == '__main__':
     de = np.zeros(7)
 
     #Constante de ganancia cinematica
-    k = 1
+    k = 0.1
     #Maxmimo error admisible
     epsilon = 0.001
     #Flag para saber si se alcanzo la posicion deseada
