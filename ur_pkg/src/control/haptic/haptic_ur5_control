@@ -22,7 +22,9 @@ if __name__ == '__main__':
 
 	tf_listener = tf.TransformListener()
 
+	# Robot real
 	#robot_client = actionlib.SimpleActionClient('/ur5_robot/scaled_pos_joint_traj_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+	# Robot en Gazebo
 	robot_client = actionlib.SimpleActionClient('/ur5_robot/pos_joint_traj_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
 	print("Waiting for server...")
 	robot_client.wait_for_server()
@@ -61,7 +63,7 @@ if __name__ == '__main__':
 		des_pos[1] = 3*haptic_pos[1]
 		des_pos[2] = 2.5*haptic_pos[2]
 
-		print(des_pos)
+		print("Pos: {} ".des_pos)
 
 		if check_ur_ws(des_pos,r_ws):
 
@@ -75,6 +77,8 @@ if __name__ == '__main__':
 
 			g.trajectory.points = [JointTrajectoryPoint(positions=Q0,time_from_start=rospy.Duration(t))]
 			robot_client.send_goal(g)
+			print("Sending goal")
+			print("")
 			robot_client.wait_for_result()
 
 		t = t + dt
